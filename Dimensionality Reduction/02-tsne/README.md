@@ -1,160 +1,332 @@
-# t-SNE — t-Distributed Stochastic Neighbor Embedding
+# t-SNE: t-Distributed Stochastic Neighbor Embedding
+
+> *"Making the invisible visible — t-SNE reveals hidden structure in high-dimensional data through the lens of probability."*
+
+A complete, beginner-friendly guide to understanding, implementing, and interpreting t-SNE for dimensionality reduction and data visualization. Designed for ML interns, students, and practitioners looking to build real intuition — not just run a function.
 
 ---
 
-## Tagline
+## 📌 Table of Contents
 
-> *Map your high-dimensional data onto a 2D canvas — so hidden clusters and patterns finally become visible to the human eye.*
-
----
-
-## Summary
-
-t-SNE is a non-linear, unsupervised dimensionality reduction technique designed primarily for **visualization**. It converts high-dimensional pairwise similarities between data points into 2D (or 3D) positions, placing similar points close together and dissimilar points far apart. Unlike PCA, which finds global linear directions of variance, t-SNE excels at revealing **local cluster structure** — making it the go-to tool for exploring embeddings, image datasets, and any high-dimensional data where clusters are expected but invisible.
+- [What is t-SNE?](#what-is-t-sne)
+- [Mathematical Formulation](#mathematical-formulation)
+- [How It Works (Step-by-Step)](#how-it-works-step-by-step)
+- [Key Assumptions](#key-assumptions)
+- [When to Use / When NOT to Use](#when-to-use--when-not-to-use)
+- [Implementation Overview](#implementation-overview)
+- [Top 5 Interview Questions](#top-5-interview-questions)
+- [Quick Reference Table](#quick-reference-table)
+- [References](#references)
 
 ---
 
 ## What is t-SNE?
 
-Imagine you manage a massive social network with millions of users. Each user has hundreds of attributes — interests, activity hours, location, content preferences. You want to create a single 2D "friendship map" where users who are genuinely similar end up sitting next to each other, and users who are very different sit far apart. That is exactly what t-SNE produces: a 2D map that honestly reflects the neighborhood structure of high-dimensional data.
+Imagine you have a city map — but it exists in 500 dimensions. t-SNE is like a master cartographer who takes that incomprehensible 500-dimensional map and folds it down into a 2D poster you can actually read, while trying to keep **neighbors close together** and **strangers far apart**.
 
-The core idea is built on **probability**. In high-dimensional space, t-SNE computes the probability that two points are "neighbors" — close points get high probability, distant points get near-zero probability. It then arranges points in 2D so that those neighborhood probabilities are matched as closely as possible. The algorithm doesn't care about absolute distances or global geometry; it cares only about *who is close to whom*.
+More precisely, t-SNE (pronounced "tee-snee") is a **non-linear dimensionality reduction algorithm** developed by Laurens van der Maaten and Geoffrey Hinton in 2008. Its primary purpose is **visualization** — it transforms data with hundreds or thousands of features into 2 or 3 dimensions while preserving the local structure (clusters and neighborhoods) of the original data.
 
-The "t" in t-SNE refers to the **Student's t-distribution** used in the low-dimensional space. This is not an arbitrary choice. In 2D, if you used a normal (Gaussian) distribution for similarities, points would crowd toward the center — a problem known as the **crowding problem**. The t-distribution has heavier tails, which gives moderately-distant points more room to spread out, producing cleaner, more separated clusters in the visualization.
+What sets t-SNE apart from linear techniques like PCA is its ability to capture **complex, non-linear relationships**. PCA preserves global variance; t-SNE preserves local similarity. Think of it this way: PCA would give you a satellite photo of a city, while t-SNE gives you a hand-drawn map that highlights neighborhoods and communities — the structure that actually matters for many tasks.
+
+The "t" in t-SNE refers to the **Student's t-distribution**, which is used in the low-dimensional space to avoid the "crowding problem" — a phenomenon where all points collapse into the center when projecting from high to low dimensions. By using a heavy-tailed distribution (the t-distribution), t-SNE spreads points out more naturally, creating visually clear and interpretable clusters.
 
 ---
 
-## Mathematical Idea
+## Mathematical Formulation
 
-t-SNE works with two sets of probability distributions — one in high-dimensional space, one in low-dimensional space — and minimizes the difference between them.
+t-SNE works by converting distances into **probabilities** in both the original high-dimensional space and the new low-dimensional space, then minimizing the difference between these two probability distributions.
 
-**High-dimensional similarity (Gaussian kernel):**
+### High-Dimensional Space: Gaussian Similarity
 
-$$p_{j|i} = \frac{\exp\!\left(-\|x_i - x_j\|^2 / 2\sigma_i^2\right)}{\displaystyle\sum_{k \neq i} \exp\!\left(-\|x_i - x_k\|^2 / 2\sigma_i^2\right)}$$
+$$p_{j|i} = \frac{\exp\left(-\|x_i - x_j\|^2 / 2\sigma_i^2\right)}{\sum_{k \neq i} \exp\left(-\|x_i - x_k\|^2 / 2\sigma_i^2\right)}$$
 
-Symmetrized joint probability:
-
-$$p_{ij} = \frac{p_{j|i} + p_{i|j}}{2n}$$
-
-**Low-dimensional similarity (Student's t-distribution, 1 degree of freedom):**
-
-$$q_{ij} = \frac{\left(1 + \|y_i - y_j\|^2\right)^{-1}}{\displaystyle\sum_{k \neq l}\left(1 + \|y_k - y_l\|^2\right)^{-1}}$$
-
-**Loss function — KL Divergence:**
-
-$$\mathcal{L} = KL(P \| Q) = \sum_{i \neq j} p_{ij} \log \frac{p_{ij}}{q_{ij}}$$
+$$p_{ij} = \frac{p_{j|i} + p_{i|j}}{2N}$$
 
 | Symbol | Meaning |
 |--------|---------|
-| $x_i, x_j$ | Points in high-dimensional space |
-| $y_i, y_j$ | Corresponding points in 2D embedding (what we optimize) |
-| $\sigma_i$ | Gaussian bandwidth for point $i$ — controlled by `perplexity` |
-| $p_{ij}$ | Probability of $i$ and $j$ being neighbors in high-D |
-| $q_{ij}$ | Probability of $i$ and $j$ being neighbors in 2D |
-| $\mathcal{L}$ | KL divergence — the loss we minimize via gradient descent |
+| $x_i, x_j$ | Data points in the original high-dimensional space |
+| $\sigma_i$ | Bandwidth of the Gaussian kernel centered on point $i$ (determined by perplexity) |
+| $p_{j\|i}$ | Conditional probability that $x_i$ would pick $x_j$ as a neighbor |
+| $p_{ij}$ | Symmetrized joint probability (used for stability) |
+| $N$ | Total number of data points |
 
-Intuitively: if two points are close in high-D ($p_{ij}$ is high), but far apart in 2D ($q_{ij}$ is low), the loss is large. Gradient descent moves the 2D points to fix this mismatch.
+**Intuition:** A high $p_{ij}$ means points $i$ and $j$ are close in the original space and should also be close in the 2D map.
 
 ---
 
-## How It Works
+### Low-Dimensional Space: Student's t-Distribution
 
-**Step 1 — Compute Pairwise Similarities in High-D**
-For every pair of points, calculate how similar they are using a Gaussian kernel. The bandwidth $\sigma_i$ is set individually per point using **binary search** so that the effective number of neighbors (controlled by `perplexity`) is consistent across all points.
+$$q_{ij} = \frac{\left(1 + \|y_i - y_j\|^2\right)^{-1}}{\sum_{k \neq l} \left(1 + \|y_k - y_l\|^2\right)^{-1}}$$
 
-**Step 2 — Symmetrize the Probabilities**
-Convert conditional probabilities $p_{j|i}$ into symmetric joint probabilities $p_{ij}$. This ensures that the relationship between two points is the same regardless of which one you start from.
+| Symbol | Meaning |
+|--------|---------|
+| $y_i, y_j$ | Corresponding points in the low-dimensional (2D/3D) map |
+| $q_{ij}$ | Similarity between points in the low-dimensional space |
 
-**Step 3 — Initialize 2D Positions**
-Place all points at random 2D positions (or use PCA initialization for stability). These are the starting positions that will be optimized.
+**Why t-distribution?** It has heavier tails than Gaussian. This means dissimilar points get pushed far apart in 2D space, resolving the crowding problem.
 
-**Step 4 — Compute Low-D Similarities**
-Using the current 2D positions, compute similarities $q_{ij}$ using the t-distribution (heavier tails than Gaussian — this is the crowding fix).
+---
 
-**Step 5 — Minimize KL Divergence via Gradient Descent**
-Compute the gradient of the KL divergence with respect to each 2D point's position. Move the points: similar pairs attract each other, dissimilar pairs repel. Repeat for hundreds of iterations until convergence.
+### Cost Function: Kullback-Leibler Divergence
 
-**Step 6 — Read the Final Map**
-The final 2D positions form your t-SNE embedding. Nearby clusters represent groups of similar data points in the original high-dimensional space.
+$$C = KL(P \| Q) = \sum_{i} \sum_{j} p_{ij} \log \frac{p_{ij}}{q_{ij}}$$
+
+| Symbol | Meaning |
+|--------|---------|
+| $C$ | Cost to minimize (lower = better 2D map) |
+| $P$ | Probability distribution in the original space |
+| $Q$ | Probability distribution in the 2D map |
+| $KL(P\|Q)$ | KL divergence — measures how different $Q$ is from $P$ |
+
+**The goal:** Find positions $y_i$ in 2D space such that $Q$ matches $P$ as closely as possible. This is done via **gradient descent**.
+
+---
+
+## How It Works (Step-by-Step)
+
+```
+High-Dimensional Data
+       │
+       ▼
+┌─────────────────────────────────────────┐
+│ STEP 1: Compute Pairwise Distances      │
+│  Calculate Euclidean distance between   │
+│  every pair of points in the original   │
+│  high-dimensional space.                │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│ STEP 2: Convert to Probabilities (P)    │
+│  Use Gaussian kernel to convert         │
+│  distances to similarity probabilities. │
+│  σ_i is tuned per point using perplexity│
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│ STEP 3: Initialize Low-Dim Map          │
+│  Randomly place points in 2D/3D space.  │
+│  (Often initialized with PCA for speed) │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│ STEP 4: Compute Q Probabilities         │
+│  Use t-distribution to compute pairwise │
+│  similarities in the low-dim space.     │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│ STEP 5: Minimize KL Divergence          │
+│  Use gradient descent to update 2D      │
+│  positions until P ≈ Q.                 │
+│  (Runs for N iterations)                │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+       2D Visualization Output
+```
+
+**Key insight at each step:**
+- **Step 2** is where perplexity matters — it controls how wide/narrow the Gaussian is, i.e., how many effective neighbors each point considers.
+- **Step 5** uses gradient descent with momentum. The algorithm prioritizes keeping similar points close (low $p_{ij}$, high $q_{ij}$ is very costly).
 
 ---
 
 ## Key Assumptions
 
-| Assumption | Why It Matters |
-|---|---|
-| **Local structure matters most** | t-SNE preserves neighborhoods, not global distances. Two clusters far apart in 2D may or may not be far in high-D. |
-| **Perplexity is meaningful** | Perplexity ≈ effective number of neighbors. If set too low, the map is noisy; too high, clusters merge. |
-| **Many iterations needed** | t-SNE converges slowly. Fewer than 250 iterations often gives misleading maps. |
-| **Not for new data** | t-SNE learns a fixed embedding — it cannot project unseen points without rerunning from scratch. |
+Understanding these assumptions prevents misinterpretation of t-SNE plots:
+
+1. **Local structure is more important than global structure.**  
+   t-SNE is designed to preserve neighborhoods, not global geometry. The distances *between* clusters in a t-SNE plot are **not meaningful**. Don't conclude that two clusters are more related just because they're closer together on the 2D map.
+
+2. **Cluster sizes in t-SNE plots don't reflect real densities.**  
+   t-SNE tends to expand dense clusters and compress sparse ones for visual clarity. A smaller cluster on the plot is not necessarily a smaller cluster in reality.
+
+3. **The result is non-deterministic.**  
+   Different random seeds produce different plots. Always set `random_state` for reproducibility.
+
+4. **Perplexity must be smaller than the number of data points.**  
+   Typical values: 5–50. Using a perplexity too close to `n_samples` causes issues.
+
+5. **t-SNE is for visualization, not feature engineering.**  
+   The 2D output components are not interpretable features. Don't feed t-SNE output directly into a downstream ML model.
 
 ---
 
-## When to Use
+## When to Use / When NOT to Use
 
-- Exploring cluster structure in high-dimensional data (images, text embeddings, gene expression)
-- Visualizing the output of neural network layers or word/sentence embeddings
-- Confirming that clusters found by K-Means or DBSCAN make visual sense
-- When your data clearly has non-linear, manifold-like structure
+### ✅ Use t-SNE When:
 
-## When NOT to Use
+| Scenario | Why t-SNE Helps |
+|----------|-----------------|
+| Exploring clusters in high-dimensional data | Reveals natural groupings visually |
+| Visualizing word embeddings or image features | Shows semantic similarity between items |
+| Sanity-checking your learned representations | Helps debug neural network embeddings |
+| EDA on datasets with 10–1000+ features | Provides 2D summary of data structure |
+| Comparing pre/post preprocessing effects | Visual diff of data distributions |
 
-- When you need to project **new data points** into the embedding (use UMAP instead)
-- When **global distances matter** — cluster separation in t-SNE plots is not meaningful
-- On datasets larger than ~50,000 rows without subsampling (very slow: O(n²))
-- As a preprocessing step for machine learning models — t-SNE embeddings don't generalize
-- When you need **reproducible results** without a fixed random seed
+### ❌ Do NOT Use t-SNE When:
+
+| Scenario | Why It Fails |
+|----------|-------------|
+| You need to transform new/unseen data | t-SNE has no `transform()` — it must refit from scratch |
+| You want interpretable axes | t-SNE axes have no meaning |
+| You're doing feature reduction before ML | Distances aren't preserved reliably; use PCA instead |
+| Your dataset has > 100K points | Will be very slow; use UMAP or PCA first |
+| You need consistent/deterministic results | Non-deterministic by nature |
+| Global structure matters | t-SNE sacrifices global geometry for local |
 
 ---
 
 ## Implementation Overview
 
-Scikit-learn provides `sklearn.manifold.TSNE` — the standard starting point:
+### Conceptual Difference: From Scratch vs Scikit-learn
 
-- **Always standardize first** using `StandardScaler`. t-SNE relies on Euclidean distances; unscaled features distort neighborhood structure.
-- **Key parameter — `perplexity`**: Controls how many neighbors each point effectively considers. Typical range: 5–50. Default is 30. Try multiple values and compare.
-- **`n_iter`**: Number of gradient descent steps. Minimum 250; recommend 1000 for stable results.
-- **`init='pca'`**: Initializes 2D positions using PCA — far more stable than random initialization, especially for larger datasets.
-- **`learning_rate='auto'`**: Scikit-learn handles this well automatically in recent versions.
-- **`random_state=42`**: Always set — t-SNE is non-deterministic and different runs give different layouts.
+#### From Scratch (What actually happens):
+```python
+# Pseudocode — conceptual walkthrough
+def tsne_from_scratch(X, perplexity=30, n_iter=1000, lr=200):
+    # Step 1: Compute pairwise distances
+    D = pairwise_euclidean_distances(X)
+    
+    # Step 2: Compute P (high-dim probabilities)
+    # Binary search for sigma_i such that H(P_i) = log(perplexity)
+    P = compute_joint_probabilities(D, perplexity)
+    
+    # Step 3: Random initialization in 2D
+    Y = random_init(n_samples=X.shape[0], n_dims=2)
+    
+    # Step 4-5: Gradient descent loop
+    for iteration in range(n_iter):
+        Q = compute_q_distribution(Y)         # t-dist in 2D
+        grad = compute_kl_gradient(P, Q, Y)   # dC/dY
+        Y = Y - lr * grad                      # Update positions
+    
+    return Y  # Final 2D coordinates
+```
 
-**Pro tip:** For large datasets, first reduce to 50 dimensions with PCA, then apply t-SNE. This dramatically speeds up the computation without losing meaningful structure.
+**Complexity:** O(N²) time and space — expensive for large N.
+
+#### With Scikit-learn (Production approach):
+```python
+from sklearn.manifold import TSNE
+
+tsne = TSNE(
+    n_components=2,     # 2D output
+    perplexity=30,      # Effective number of neighbors
+    learning_rate=200,  # Step size for gradient descent
+    n_iter=1000,        # Number of optimization steps
+    random_state=42     # For reproducibility
+)
+
+X_embedded = tsne.fit_transform(X)  # Shape: (n_samples, 2)
+```
+
+Scikit-learn's implementation uses the **Barnes-Hut approximation** (O(N log N)) for large datasets, which is dramatically faster than the naive O(N²) implementation.
+
+#### Key Hyperparameters Explained:
+
+| Hyperparameter | Default | Effect |
+|----------------|---------|--------|
+| `perplexity` | 30 | Controls number of effective neighbors. Low = local focus. High = global focus. Try: 5–50 |
+| `learning_rate` | 200 | Gradient descent step size. Too high = noisy; too low = slow convergence. Try: 10–1000 |
+| `n_iter` | 1000 | Total optimization steps. More = better results, slower runtime. Min: 250 |
+| `n_components` | 2 | Output dimensions. Usually 2 for visualization, rarely 3 |
+| `early_exaggeration` | 12 | Multiplies P values early in optimization to form tight clusters |
+| `init` | 'pca' | Initialization method. PCA init is more stable than random |
 
 ---
 
-## Top Interview Questions
+## Top 5 Interview Questions
 
-| Question | Key Hint |
-|---|---|
-| What is t-SNE and what makes it different from PCA? | t-SNE is non-linear and preserves local structure; PCA is linear and preserves global variance. t-SNE is for visualization only. |
-| What is perplexity and how does it affect the result? | Perplexity ≈ effective number of neighbors per point. Low → noisy local clusters; High → clusters may merge. Try 5, 30, 50 and compare. |
-| Why does t-SNE use the t-distribution in low-D instead of Gaussian? | To solve the crowding problem. Gaussian in 2D clusters too many moderately-distant points near the center. The t-distribution's heavy tails give them room to spread. |
-| Can t-SNE be used for feature engineering or preprocessing? | No. t-SNE embeddings can't project new data and don't generalize. It's purely for visualization/exploration. |
-| What are the limitations of t-SNE? | Slow (O(n²)); non-deterministic; cluster sizes and inter-cluster distances are not meaningful; cannot handle new points. |
+### Q1: What problem does t-SNE solve, and how is it different from PCA?
+
+**Answer:**  
+t-SNE solves the problem of **visualizing high-dimensional data** by reducing it to 2D or 3D while preserving **local neighborhood structure**. PCA is a linear technique that maximizes global variance and finds orthogonal components. t-SNE is non-linear and focuses on keeping similar points close in the low-dimensional space. PCA is deterministic, interpretable, and invertible — ideal for preprocessing. t-SNE is stochastic, non-invertible, and for visualization only. Use PCA when you want to reduce dimensions before training a model; use t-SNE when you want to visually explore structure.
+
+---
+
+### Q2: What is perplexity in t-SNE, and how do you choose it?
+
+**Answer:**  
+Perplexity is a measure of the **effective number of neighbors** each point considers. Mathematically, it controls the bandwidth $\sigma_i$ of the Gaussian kernel: a higher perplexity leads to wider kernels (more neighbors considered). Practically, perplexity = 30 means each point is compared against roughly 30 neighbors. Typical values range from 5 to 50. A rule of thumb: perplexity should be smaller than the number of data points and roughly `sqrt(N)` for medium datasets. Always run t-SNE with multiple perplexity values and compare visualizations — structure that appears in all runs is likely real.
+
+---
+
+### Q3: Why does t-SNE use a t-distribution in the low-dimensional space instead of a Gaussian?
+
+**Answer:**  
+This is the key innovation of t-SNE over SNE. When projecting from high to low dimensions, there's a **crowding problem**: the area of a 2D ball grows as $r^2$ while a high-dimensional ball grows as $r^d$ — meaning there's not enough space in 2D to faithfully represent all moderate-distance neighbors. Using a **Student's t-distribution** (with 1 degree of freedom, equivalent to a Cauchy distribution) in the low-dimensional space gives the distribution **heavy tails**. This allows moderately dissimilar points to be placed much farther apart in 2D than they would be with a Gaussian, naturally resolving the crowding problem and creating cleaner, more separated clusters.
+
+---
+
+### Q4: Can you use t-SNE output as features for a downstream ML model? Why or why not?
+
+**Answer:**  
+Generally **no**, and this is a common mistake. There are several reasons:
+1. **No transform method**: t-SNE cannot embed new data points without refitting. Scikit-learn's `TSNE` has no `.transform()` — only `.fit_transform()`.
+2. **Non-deterministic**: Different runs give different embeddings, making it impossible to consistently embed train and test sets in the same space.
+3. **Distances not preserved globally**: The 2D coordinates don't faithfully encode feature relationships useful for prediction.
+4. **Overfitting risk**: t-SNE can create spurious clusters, misleading a downstream model.
+If you need to reduce dimensions before ML, use PCA, UMAP (which supports `transform()`), or autoencoders.
+
+---
+
+### Q5: What are common pitfalls when interpreting t-SNE plots?
+
+**Answer:**  
+Three major pitfalls, frequently asked at FAANG:
+1. **Cluster sizes are meaningless**: t-SNE expands dense clusters and compresses sparse ones for visual clarity. A visually larger cluster is not necessarily a larger cluster in reality.
+2. **Inter-cluster distances are meaningless**: The distance between cluster A and cluster B in the 2D plot tells you nothing about their actual dissimilarity in the original space. t-SNE only reliably preserves *local* (within-cluster) structure.
+3. **Noise can look like clusters**: With the wrong perplexity or insufficient iterations, random noise can appear as structured clusters. Always validate t-SNE findings with quantitative methods (silhouette score, cluster purity) and try multiple random seeds.
 
 ---
 
 ## Quick Reference Table
 
-| Item | Detail |
-|------|--------|
-| Type | Non-linear, Unsupervised |
-| Primary Use | Visualization (2D / 3D only) |
-| Preserves | Local neighborhood structure |
-| Does NOT Preserve | Global distances, cluster sizes |
-| Key Hyperparameter | `perplexity` (5–50) |
-| Complexity | O(n²) standard; O(n log n) Barnes-Hut |
-| New Data Projection | ❌ Not supported |
-| Scikit-learn Class | `sklearn.manifold.TSNE` |
-| Strength | Reveals clusters invisible to PCA |
-| Limitation | Slow, non-deterministic, visualization only |
+| Property | Value |
+|----------|-------|
+| **Type** | Non-linear, unsupervised dimensionality reduction |
+| **Primary Use** | Data visualization (2D/3D) |
+| **Time Complexity** | O(N²) naive; O(N log N) with Barnes-Hut approximation |
+| **Space Complexity** | O(N²) |
+| **Output** | Low-dimensional coordinates (no feature interpretation) |
+| **Invertible?** | No |
+| **Handles New Data?** | No (must refit) |
+| **Deterministic?** | No (set `random_state` for reproducibility) |
+| **Key Hyperparameters** | `perplexity` (5–50), `learning_rate` (10–1000), `n_iter` (≥250) |
+| **Ideal Dataset Size** | < 100K samples (use UMAP for larger) |
+| **Comparison** | Better than PCA for non-linear structure; slower than UMAP |
+| **Paper** | van der Maaten & Hinton, JMLR 2008 |
+
+### t-SNE vs PCA vs UMAP
+
+| Feature | PCA | t-SNE | UMAP |
+|---------|-----|-------|------|
+| Linear? | Yes | No | No |
+| Preserves | Global variance | Local structure | Local + some global |
+| Speed | Very fast | Slow | Fast |
+| New data? | Yes | No | Yes |
+| Deterministic? | Yes | No | No (but more stable) |
+| Best for | Preprocessing, noise removal | Visualization | Visualization + downstream use |
 
 ---
 
 ## References
 
-- [Scikit-learn TSNE Documentation](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
-- [van der Maaten & Hinton (2008) — Original t-SNE Paper](https://jmlr.org/papers/v9/vandermaaten08a.html)
-- [Distill.pub — How to Use t-SNE Effectively](https://distill.pub/2016/misread-tsne/)
-- [StatQuest — t-SNE Clearly Explained (YouTube)](https://www.youtube.com/watch?v=NEaUSP4YerM)
-- [Kaggle — Iris Dataset](https://www.kaggle.com/datasets/uciml/iris)
+1. **Original Paper**: van der Maaten, L. & Hinton, G. (2008). *Visualizing Data using t-SNE*. Journal of Machine Learning Research, 9, 2579–2605. [Link](https://jmlr.org/papers/v9/vandermaaten08a.html)
+
+2. **Distill.pub Interactive Guide**: Wattenberg, M., Viégas, F., & Johnson, I. (2016). *How to Use t-SNE Effectively*. Distill. [Link](https://distill.pub/2016/misread-tsne/) — **Must read before interpreting any t-SNE plot.**
+
+3. **Scikit-learn Documentation**: *t-SNE User Guide and API Reference*. [Link](https://scikit-learn.org/stable/modules/generated/sklearn.manifold.TSNE.html)
+
+4. **StatQuest with Josh Starmer**: *t-SNE, Clearly Explained!!!* [YouTube](https://www.youtube.com/watch?v=NEaUSP4YerM) — Best video explanation for beginners.
+
+5. **Comparison with UMAP**: McInnes, L., Healy, J., & Melville, J. (2018). *UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction*. [arXiv](https://arxiv.org/abs/1802.03426)
+
+---
+
+
