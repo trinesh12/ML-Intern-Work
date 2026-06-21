@@ -619,20 +619,19 @@ The moment autoencoders clicked for me was when I realized the bottleneck forces
 
 I use autoencoders primarily for anomaly detection — training on "normal" data and flagging points with high reconstruction error. For dimensionality reduction, I use them when the data has clear non-linear structure that PCA misses (like image data or sensor signals). For VAEs, I use them when I need both a good latent representation AND the ability to generate new samples. A practical tip: I always monitor reconstruction loss and KL loss separately (not just the combined ELBO), and I use KL annealing (starting $\beta=0$ and gradually increasing to 1) to prevent posterior collapse. For most practical DR tasks, I start with PCA or UMAP before reaching for autoencoders — they need more data and tuning.
 
-## Visual Summary
-
 ```mermaid
 flowchart LR
-    A[Input x] --> B[Encoder f_φ]
+    A[Input x] --> B[Encoder f_phi]
     B --> C[Latent z]
-    C --> D[Decoder g_θ]
-    D --> E[Reconstruction x̂]
-    E --> F{Loss = MSE(x, x̂)}
-    
-    G[VAE adds:] --> H[μ, σ instead of z]
-    H --> I[Reparameterization: z = μ + σ·ε]
-    I --> J[KL regularization against N(0,I)]
+    C --> D[Decoder g_theta]
+    D --> E[Reconstruction x_hat]
+    E --> F[Loss: MSE(x, x_hat)]
+
+    G[VAE adds] --> H[mu, sigma instead of z]
+    H --> I[z = mu + sigma * epsilon]
+    I --> J[KL divergence vs Normal(0, I)]
 ```
+
 
 ---
 
