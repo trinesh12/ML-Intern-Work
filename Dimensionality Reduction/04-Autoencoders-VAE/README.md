@@ -625,11 +625,12 @@ flowchart LR
     B --> C[Latent z]
     C --> D[Decoder g_theta]
     D --> E[Reconstruction x_hat]
-    E --> F[Loss: MSE(x, x_hat)]
+    E --> F[Loss MSE x x_hat]
 
-    G[VAE adds] --> H[mu, sigma instead of z]
-    H --> I[z = mu + sigma * epsilon]
-    I --> J[KL divergence vs Normal(0, I)]
+    G[VAE adds]
+    G --> H[mu sigma instead of z]
+    H --> I[z equals mu plus sigma times epsilon]
+    I --> J[KL divergence vs Normal 0 I]
 ```
 
 
