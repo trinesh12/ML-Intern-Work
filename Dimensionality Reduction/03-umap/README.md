@@ -96,23 +96,44 @@ $$w_{ij} = v_{j|i} + v_{i|j} - v_{j|i} \cdot v_{i|j}$$
 
 **Low-dimensional similarity (adjusted t-distribution):**
 
-$$q_{ij} = \left(1 + a \cdot \|y_i - y_j\|^{2b}\right)^{-1}$$
+$$q_{ij} = \left(1 + a \cdot |y_i - y_j|^{2b}\right)^{-1}$$
 
-| Symbol | Meaning |
-|--------|---------|
-| $y_i, y_j$ | Coordinates in the low-dimensional embedding |
-| $a, b$ | Shape parameters automatically fit from `min_dist` |
-| $q_{ij}$ | Fuzzy similarity in the low-dimensional space |
+| Symbol     | Meaning                                            |
+| ---------- | -------------------------------------------------- |
+| $y_i, y_j$ | Coordinates in the low-dimensional embedding       |
+| $a, b$     | Shape parameters automatically fit from `min_dist` |
+| $q_{ij}$   | Fuzzy similarity in the low-dimensional space      |
 
-**How $a$ and $b$ are fit:** Given `min_dist` (a user parameter), the algorithm finds $a, b$ that minimize:
+---
 
-$$\left(\frac{1}{1 + a \cdot d^{2b}}\right) - \text{desired\_curve}(d)$$
+### How $a$ and $b$ are fit
 
-where $\text{desired\_curve}(d)$ is 1 for $d < \text{min\_dist}$ and decays smoothly to 0 after.
+Given `min_dist` (a user parameter), the algorithm finds $a, b$ by fitting the curve:
 
-- **Low min_dist (0.0):** Tight clusters, $a, b$ create a steep curve
-- **High min_dist (0.5+):** Spread-out embedding, $a, b$ create a gradual curve
-- **Default (0.1):** Balanced between tight clusters and global spread
+$$\frac{1}{1 + a \cdot d^{2b}}$$
+
+to match a target curve defined by:
+
+* $\mathrm{desired_curve}(d) = 1$ for $d < \mathrm{min_dist}$
+* Smoothly decays to $0$ for $d > \mathrm{min_dist}$
+
+This is done by minimizing the squared error:
+
+$$\sum_d \left[\left(\frac{1}{1 + a \cdot d^{2b}}\right) - \mathrm{desired_curve}(d)\right]^2$$
+
+---
+
+### Effect of `min_dist`
+
+* **Low min_dist (0.0):**
+  Tight clusters → $a, b$ create a steep curve
+
+* **High min_dist (0.5+):**
+  More spread-out embedding → $a, b$ create a smoother curve
+
+* **Default (0.1):**
+  Balanced between local clustering and global structure
+
 
 ### Cross-Entropy Loss (Optimization Objective)
 
